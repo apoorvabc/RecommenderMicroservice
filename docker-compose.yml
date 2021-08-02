@@ -1,0 +1,60 @@
+version: "3"
+services:
+  movie_database:
+    image: "postgres" # use latest official postgres version
+    env_file:
+      - database.env # configure postgres
+    volumes:
+      - database-data:/var/lib/postgresql/mdata/ # persist data even if container shuts down
+    networks:
+      - recsys
+    expose: 
+      - "2311"
+    ports:
+      - "2311:5432"
+    command: -p 2311
+
+  collector:
+    build: ./collector
+    command: tail -F anything
+    depends_on:
+      - movie_database
+    networks:
+      - recsys
+    ports:
+      - "2111:2111"
+
+  recommender:
+    build: ./recommender
+    depends_on:
+      - movie_database
+    networks:
+      - recsys
+    ports:
+      - "2211:2211"
+
+  result:
+    build: ./result
+    depends_on:
+      - recommender
+    command:
+      [
+        "./wait-for-it.sh",
+        "collector:2111",
+        "-t",
+        "0",
+        "--",
+        "node",
+        "index.js",
+      ]
+    networks:
+      - recsys
+    ports:
+      - "2411:2411"
+
+volumes:
+  database-data: # named volumes can be managed easier using docker-compose
+
+networks:
+  recsys:
+    driver: bridge
